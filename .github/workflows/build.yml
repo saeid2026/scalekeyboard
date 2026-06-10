@@ -5,18 +5,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Change permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Gradle Wrapper
-        run: ./gradlew assembleDebug
+      - name: Run Gradle Build Action
+        uses: charlgru/android-build-action@v2
+        with:
+          gradle-task: assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
