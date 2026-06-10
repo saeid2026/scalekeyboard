@@ -2,29 +2,39 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:name="android.hardware.usb.host" />
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
 
-    <application>
-        <service
-            android:name=".ScaleKeyboardService"
-            android:label="Scale Serial Keyboard"
-            android:permission="android.permission.BIND_INPUT_METHOD"
+    <application
+        android:allowBackup="true"
+        android:label="Mecmesin Data Wedge"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.DeviceDefault">
+        
+        <activity
+            android:name=".MainActivity"
             android:exported="true">
-            
             <intent-filter>
-                <action android:name="android.view.InputMethod" />
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
-            
-            <meta-data
-                android:name="android.view.inputmethod"
-                android:resource="@xml/method" />
-                
             <meta-data
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-                android:resource="@xml/device_filter" />
+                android:resource="@xml/usb_device_filter" />
+        </activity>
+
+        <service
+            android:name=".MecmesinWedgeService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.accessibility.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.accessibility.AccessibilityService"
+                android:resource="@xml/accessibility_service_config" />
         </service>
     </application>
 </manifest>
