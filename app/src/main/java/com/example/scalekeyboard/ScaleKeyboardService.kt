@@ -1,28 +1,33 @@
 package com.example.scalekeyboard
 
-import android.inputmethodservice.InputMethodService
-import android.view.KeyEvent
-import android.view.inputmethod.InputConnection
+import android.accessibilityservice.AccessibilityService
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.hardware.usb.UsbManager
-import android.hardware.usb.UsbDevice
 import android.content.Context
+import android.os.Bundle
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.util.SerialInputOutputManager
 import java.util.concurrent.Executors
 
-class ScaleKeyboardService : InputMethodService(), SerialInputOutputManager.Listener {
+class MecmesinWedgeService : AccessibilityService(), SerialInputOutputManager.Listener {
+
+    companion object {
+        var instance: MecmesinWedgeService? = null
+    }
 
     private var usbPort: UsbSerialPort? = null
     private var usbIoManager: SerialInputOutputManager? = null
     private val executor = Executors.newSingleThreadExecutor()
 
-    override fun onCreate() {
-        super.onCreate()
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
         startUsbConnection()
     }
 
-    private fun startUsbConnection() {
+    fun startUsbConnection() {
         val manager = getSystemService(Context.USB_SERVICE) as UsbManager
         val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(manager)
         if (availableDrivers.isEmpty()) return
@@ -44,34 +49,40 @@ class ScaleKeyboardService : InputMethodService(), SerialInputOutputManager.List
 
     override fun onNewData(data: ByteArray?) {
         if (data == null || data.isEmpty()) return
-
-        // تبدیل مستقیم بایت‌ها به متن بدون هیچ فیلتری (دقیقاً مثل برنامه ترمینال)
         val rawData = String(data, Charsets.UTF_8).trim()
 
         if (rawData.isNotEmpty()) {
-            val ic: InputConnection = currentInputConnection ?: return
+            // پیدا کردن کادر متنی که در حال حاضر کاربر رویش کلیک کرده است
+            val rootNode = rootInActiveWindow ?: return
+            val focusedNode = findFocusedNode(rootNode)
             
-            // تایپ مستقیم متن ترازو
-            ic.commitText(rawData, 1)
-            
-            // ارسال خودکار کلید اینتر
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-            ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+            focusedNode?.let { node ->
+                val arguments = Bundle()
+                arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, rawData)
+                // تزریق مستقیم متن گشتاورسنج به داخل کادر (مثل اکسل)
+                node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+            }
         }
     }
 
-    override fun onRunError(e: Exception?) {
-        // هندل کردن خطاهای احتمالی اتصال
-        e?.printStackTrace()
+    private fun findFocusedNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isFocused && node.className == "android.widget.EditText") return node
+        for (i in 0 until node.childCount) {
+            val focused = findFocusedNode(node.getChild(i))
+            if (focused != null) return focused
+        }
+        return null
     }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onInterrupt() {}
+    override fun onRunError(e: Exception?) { e?.printStackTrace() }
 
     override fun onDestroy() {
         usbIoManager?.stop()
-        try {
-            usbPort?.close()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        usbPort?.close()
+        instance = null
         super.onDestroy()
     }
 }
