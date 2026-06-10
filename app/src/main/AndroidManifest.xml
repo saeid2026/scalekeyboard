@@ -17,8 +17,9 @@
             </intent-filter>
             
             <meta-data
-                android:name="android.view.im"
+                android:name="android.view.inputmethod"
                 android:resource="@xml/method" />
+                
             <meta-data
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
