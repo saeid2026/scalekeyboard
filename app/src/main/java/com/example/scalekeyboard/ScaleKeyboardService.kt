@@ -45,15 +45,20 @@ class ScaleKeyboardService : InputMethodService(), SerialInputOutputManager.List
     override fun onNewData(data: ByteArray?) {
         if (data == null || data.isEmpty()) return
 
-        val rawData = String(data, Charsets.UTF_8)
-        val cleanWeight = rawData.filter { it.isDigit() || it == '.' || it == '-' }
+        // تبدیل مستقیم بایت‌ها به متن بدون هیچ فیلتر سخت‌گیرانه‌ای
+        val rawData = String(data, Charsets.UTF_8).trim()
 
-        if (cleanWeight.isNotEmpty()) {
+        if (rawData.isNotEmpty()) {
             val ic: InputConnection = currentInputConnection ?: return
-            ic.commitText(cleanWeight, 1)
             
+            // تایپ مستقیم همان چیزی که در برنامه ترمینال دیده می‌شود
+            ic.commitText(rawData, 1)
+            
+            // زدن دکمه اینتر برای رفتن به خط بعدی
             ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
             ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        }
+    }
         }
     }
 
