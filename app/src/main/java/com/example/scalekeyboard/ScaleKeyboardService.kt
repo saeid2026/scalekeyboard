@@ -33,7 +33,7 @@ class ScaleKeyboardService : InputMethodService(), SerialInputOutputManager.List
         usbPort = driver.ports[0]
         try {
             usbPort?.open(connection)
-            usbPort?.setParameters(9600, 8, UsbSerialPort.DATABITS_8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            usbPort?.setParameters(9600, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
 
             usbIoManager = SerialInputOutputManager(usbPort, this)
             Executors.newSingleThreadExecutor().submit(usbIoManager)
