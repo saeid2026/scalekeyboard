@@ -1,25 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.scalekeyboard">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:name="android.hardware.usb.host" />
 
-    <application
-        android:allowBackup="true"
-        android:label="Scale Keyboard"
-        android:supportsRtl="true">
-        
+    <application>
         <service
             android:name=".ScaleKeyboardService"
             android:label="Scale Serial Keyboard"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.view.InputMethod" />
+                <action android:name="view.InputMethod" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            
             <meta-data
                 android:name="android.view.im"
                 android:resource="@xml/method" />
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
         </service>
     </application>
 </manifest>
