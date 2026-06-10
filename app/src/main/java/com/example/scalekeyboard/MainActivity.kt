@@ -10,11 +10,12 @@ import android.provider.Settings
 
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState) // خطای این بخش اصلاح شد
+        super.onCreate(savedInstanceState)
         
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            padding = 50
+            // اصلاح متد پدینگ برای اندروید
+            setPadding(50, 50, 50, 50)
         }
         
         val infoText = TextView(this).apply {
