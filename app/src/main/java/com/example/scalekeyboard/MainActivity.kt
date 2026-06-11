@@ -24,12 +24,12 @@ class MainActivity : android.app.Activity() {
         }
         
         val infoText = android.widget.TextView(this).apply {
-            text = "مراحل فعال‌سازی اتوماتیک:\n۱. دکمه زیر را بزنید و در صفحه باز شده، نام برنامه (Mecmesin Wedge) را پیدا کرده و آن را روشن (On) کنید.\n۲. کابل دستگاه را وصل کنید.\n۳. حالا وارد کروم یا نوت شوید؛ با زدن دکمه دستگاه، عدد خودکار تایپ می‌شود."
+            text = "برنامه با موفقیت فعال است.\nحالا خروجی اعداد به صورت اعشاری و تمیز اصلاح شده است."
             textSize = 18f
         }
         
         val btnAccessibility = android.widget.Button(this).apply {
-            text = "فعال‌سازی سرویس تایپ خودکار"
+            text = "تنظیمات دسترسی‌پذیری"
             setOnClickListener {
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 startActivity(intent)
@@ -49,7 +49,6 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
     private var isConnected = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // وقتی کابل وصل می‌شود و سرویس زنده است، پورت را باز نگه می‌دارد
         if (!isConnected) {
             startUsbConnection()
         }
@@ -59,7 +58,6 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Toast.makeText(this, "سرویس تایپ خودکار فعال شد", Toast.LENGTH_SHORT).show()
         startUsbConnection()
     }
 
@@ -79,10 +77,6 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
             usbIoManager = SerialInputOutputManager(usbPort, this)
             executor.submit(usbIoManager)
             isConnected = true
-            
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                Toast.makeText(this, "دستگاه گشتاورسنج متصل و آماده است! 🟢", Toast.LENGTH_LONG).show()
-            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -90,15 +84,32 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
 
     override fun onNewData(data: ByteArray?) {
         if (data == null || data.isEmpty()) return
-        val lastData = String(data, Charsets.UTF_8).trim()
+        val rawData = String(data, Charsets.UTF_8).trim()
         
-        // پیدا کردن کادر متنی که فوکوس (نشانگر چشمک‌زن) روی آن است و تایپ خودکار عدد
+        // هوشمندسازی استخراج عدد:
+        // ۱. حذف تمام حروف انگلیسی و واحدهای دستگاه (مثل ibf.in)
+        var cleanNumber = rawData.replace(Regex("[a-zA-Z.\\s]+"), "")
+        
+        // ۲. تبدیل به فرمت اعشاری درست (اگر عدد مثلاً 08 بود، تبدیلش می‌کند به 0.08)
+        if (cleanNumber.length >= 2) {
+            val numAsDouble = cleanNumber.toDoubleOrNull()
+            if (numAsDouble != null) {
+                // تقسیم بر 100 برای ایجاد دو رقم اعشار دقیق مشابه روی دستگاه
+                cleanNumber = String.format(java.util.Locale.US, "%.2f", numAsDouble / 100.0)
+            }
+        } else if (cleanNumber.isNotEmpty()) {
+            cleanNumber = "0.0$cleanNumber"
+        }
+
+        if (cleanNumber.isEmpty()) return
+
+        // تایپ خودکار عدد اصلاح شده
         val rootNode = rootInActiveWindow ?: return
         val focusedNode = findFocusedNode(rootNode)
         
         if (focusedNode != null) {
             val arguments = Bundle().apply {
-                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, lastData)
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, cleanNumber)
             }
             focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
         }
