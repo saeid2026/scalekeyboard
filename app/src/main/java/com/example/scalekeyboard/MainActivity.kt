@@ -31,7 +31,7 @@ class MainActivity : Activity() {
         }
         
         val infoText = TextView(this).apply {
-            text = "ابتدا دکمه زیر را بزنید و اجازه 'نمایش روی برنامه‌های دیگر' را فعال کنید. سپس دستگاه را وصل کنید."
+            text = "۱. ابتدا دکمه شناور را فعال کنید.\n۲. کابل دستگاه Mecmesin را وصل کنید.\n۳. روی مربع قرمز روی صفحه کلیک کنید تا اتصال برقرار شود."
             textSize = 18f
         }
         
@@ -68,9 +68,14 @@ class MecmesinFloatingService : Service(), SerialInputOutputManager.Listener {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         
         floatingButton = Button(this).apply {
-            text = "دستگاه قطع"
+            text = "دستگاه قطع (کلیک جهت اتصال)"
             setBackgroundColor(0xFFFF0000.toInt())
             setTextColor(0xFFFFFFFF.toInt())
+            
+            // اضافه شدن قابلیت کلیک روی دکمه قرمز برای اسکن مجدد پورت USB
+            setOnClickListener {
+                startUsbConnection()
+            }
         }
 
         val params = WindowManager.LayoutParams(
@@ -92,10 +97,19 @@ class MecmesinFloatingService : Service(), SerialInputOutputManager.Listener {
     fun startUsbConnection() {
         val manager = getSystemService(Context.USB_SERVICE) as UsbManager
         val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(manager)
-        if (availableDrivers.isEmpty()) return
+        
+        if (availableDrivers.isEmpty()) {
+            Toast.makeText(this, "هیچ کابل یا دستگاه USB شناسایی نشد! اتصالات را چک کنید.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         val driver = availableDrivers[0]
-        val connection = manager.openDevice(driver.device) ?: return
+        val connection = manager.openDevice(driver.device) 
+        
+        if (connection == null) {
+            Toast.makeText(this, "دستگاه وصل است اما مجوز اندروید صادر نشده است.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         usbPort = driver.ports[0]
         try {
@@ -108,9 +122,25 @@ class MecmesinFloatingService : Service(), SerialInputOutputManager.Listener {
             floatingButton?.post {
                 floatingButton?.text = "آماده دریافت عدد"
                 floatingButton?.setBackgroundColor(0xFF00AA00.toInt())
+                // بعد از سبز شدن، وظیفه دکمه تبدیل به کپی کردن متن می‌شود
+                floatingButton?.setOnClickListener {
+                    copyToClipboard()
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            Toast.makeText(this, "خطا در باز کردن پورت: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun copyToClipboard() {
+        if (lastData.isNotEmpty()) {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Mecmesin", lastData)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "عدد $lastData کپی شد!", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "هنوز دیتایی از دستگاه ارسال نشده است.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -119,13 +149,7 @@ class MecmesinFloatingService : Service(), SerialInputOutputManager.Listener {
         lastData = String(data, Charsets.UTF_8).trim()
         
         floatingButton?.post {
-            floatingButton?.text = "دیتا: $lastData (برای کپی کلیک کنید)"
-            floatingButton?.setOnClickListener {
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                val clip = android.content.ClipData.newPlainText("Mecmesin", lastData)
-                clipboard.setPrimaryClip(clip)
-                Toast.makeText(this, "عدد کپی شد! حالا توی اکسل پیست کنید", Toast.LENGTH_SHORT).show()
-            }
+            floatingButton?.text = "دیتا: $lastData (کلیک جهت کپی)"
         }
     }
 
