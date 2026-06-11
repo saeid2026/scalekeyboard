@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mecmesin Wedge</string>
+    <string name="accessibility_desc">سرویس تایپ خودکار دیتای دستگاه Mecmesin</string>
+</resources>
