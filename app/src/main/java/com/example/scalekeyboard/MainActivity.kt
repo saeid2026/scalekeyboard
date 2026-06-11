@@ -1,115 +1,75 @@
 package com.example.scalekeyboard
 
-import android.app.Activity
-import android.app.Service
+import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
-import android.graphics.PixelFormat
 import android.hardware.usb.UsbManager
-import android.net.Uri
 import android.os.Bundle
-import android.os.IBinder
 import android.provider.Settings
-import android.view.Gravity
-import android.view.WindowManager
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.util.SerialInputOutputManager
 import java.util.concurrent.Executors
 
-class MainActivity : Activity() {
+class MainActivity : android.app.Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
             setPadding(50, 50, 50, 50)
         }
         
-        val infoText = TextView(this).apply {
-            text = "۱. ابتدا دکمه شناور را فعال کنید.\n۲. کابل دستگاه Mecmesin را وصل کنید.\n۳. روی مربع قرمز روی صفحه کلیک کنید تا اتصال برقرار شود."
+        val infoText = android.widget.TextView(this).apply {
+            text = "مراحل فعال‌سازی اتوماتیک:\n۱. دکمه زیر را بزنید و در صفحه باز شده، نام برنامه (Mecmesin Wedge) را پیدا کرده و آن را روشن (On) کنید.\n۲. کابل دستگاه را وصل کنید.\n۳. حالا وارد کروم یا نوت شوید؛ با زدن دکمه دستگاه، عدد خودکار تایپ می‌شود."
             textSize = 18f
         }
         
-        val btnOverlay = Button(this).apply {
-            text = "فعال‌سازی دکمه شناور"
+        val btnAccessibility = android.widget.Button(this).apply {
+            text = "فعال‌سازی سرویس تایپ خودکار"
             setOnClickListener {
-                if (!Settings.canDrawOverlays(this@MainActivity)) {
-                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-                    startActivity(intent)
-                } else {
-                    startService(Intent(this@MainActivity, MecmesinFloatingService::class.java))
-                }
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                startActivity(intent)
             }
         }
 
         layout.addView(infoText)
-        layout.addView(btnOverlay)
+        layout.addView(btnAccessibility)
         setContentView(layout)
     }
 }
 
-class MecmesinFloatingService : Service(), SerialInputOutputManager.Listener {
-    private var windowManager: WindowManager? = null
-    private var floatingButton: Button? = null
+class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputManager.Listener {
     private var usbPort: UsbSerialPort? = null
     private var usbIoManager: SerialInputOutputManager? = null
     private val executor = Executors.newSingleThreadExecutor()
-    private var lastData: String = ""
+    private var isConnected = false
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onCreate() {
-        super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        
-        floatingButton = Button(this).apply {
-            text = "دستگاه قطع (کلیک جهت اتصال)"
-            setBackgroundColor(0xFFFF0000.toInt())
-            setTextColor(0xFFFFFFFF.toInt())
-            
-            // اضافه شدن قابلیت کلیک روی دکمه قرمز برای اسکن مجدد پورت USB
-            setOnClickListener {
-                startUsbConnection()
-            }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // وقتی کابل وصل می‌شود و سرویس زنده است، پورت را باز نگه می‌دارد
+        if (!isConnected) {
+            startUsbConnection()
         }
+    }
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = 0
-            y = 100
-        }
+    override fun onInterrupt() {}
 
-        windowManager?.addView(floatingButton, params)
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Toast.makeText(this, "سرویس تایپ خودکار فعال شد", Toast.LENGTH_SHORT).show()
         startUsbConnection()
     }
 
     fun startUsbConnection() {
         val manager = getSystemService(Context.USB_SERVICE) as UsbManager
         val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(manager)
-        
-        if (availableDrivers.isEmpty()) {
-            Toast.makeText(this, "هیچ کابل یا دستگاه USB شناسایی نشد! اتصالات را چک کنید.", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (availableDrivers.isEmpty()) return
 
         val driver = availableDrivers[0]
-        val connection = manager.openDevice(driver.device) 
-        
-        if (connection == null) {
-            Toast.makeText(this, "دستگاه وصل است اما مجوز اندروید صادر نشده است.", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val connection = manager.openDevice(driver.device) ?: return
 
         usbPort = driver.ports[0]
         try {
@@ -118,39 +78,40 @@ class MecmesinFloatingService : Service(), SerialInputOutputManager.Listener {
 
             usbIoManager = SerialInputOutputManager(usbPort, this)
             executor.submit(usbIoManager)
+            isConnected = true
             
-            floatingButton?.post {
-                floatingButton?.text = "آماده دریافت عدد"
-                floatingButton?.setBackgroundColor(0xFF00AA00.toInt())
-                // بعد از سبز شدن، وظیفه دکمه تبدیل به کپی کردن متن می‌شود
-                floatingButton?.setOnClickListener {
-                    copyToClipboard()
-                }
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Toast.makeText(this, "دستگاه گشتاورسنج متصل و آماده است! 🟢", Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(this, "خطا در باز کردن پورت: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun copyToClipboard() {
-        if (lastData.isNotEmpty()) {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            val clip = android.content.ClipData.newPlainText("Mecmesin", lastData)
-            clipboard.setPrimaryClip(clip)
-            Toast.makeText(this, "عدد $lastData کپی شد!", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "هنوز دیتایی از دستگاه ارسال نشده است.", Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onNewData(data: ByteArray?) {
         if (data == null || data.isEmpty()) return
-        lastData = String(data, Charsets.UTF_8).trim()
+        val lastData = String(data, Charsets.UTF_8).trim()
         
-        floatingButton?.post {
-            floatingButton?.text = "دیتا: $lastData (کلیک جهت کپی)"
+        // پیدا کردن کادر متنی که فوکوس (نشانگر چشمک‌زن) روی آن است و تایپ خودکار عدد
+        val rootNode = rootInActiveWindow ?: return
+        val focusedNode = findFocusedNode(rootNode)
+        
+        if (focusedNode != null) {
+            val arguments = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, lastData)
+            }
+            focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
         }
+    }
+
+    private fun findFocusedNode(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.isFocused) return node
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findFocusedNode(child)
+            if (result != null) return result
+        }
+        return null
     }
 
     override fun onRunError(e: java.lang.Exception?) {}
@@ -159,6 +120,5 @@ class MecmesinFloatingService : Service(), SerialInputOutputManager.Listener {
         super.onDestroy()
         usbIoManager?.stop()
         usbPort?.close()
-        if (floatingButton != null) windowManager?.removeView(floatingButton)
     }
 }
