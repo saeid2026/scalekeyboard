@@ -20,16 +20,37 @@ class MainActivity : android.app.Activity() {
         
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(50, 50, 50, 50)
+            setPadding(60, 60, 60, 60)
+            background = android.graphics.drawable.ColorDrawable(0xFFF8FAFC.toInt()) // تم روشن و مدرن
         }
         
         val infoText = android.widget.TextView(this).apply {
-            text = "برنامه با موفقیت فعال است.\nحالا خروجی اعداد به صورت اعشاری و تمیز اصلاح شده است."
-            textSize = 18f
+            text = "Mecmesin Wedge Active!\n\n" +
+                   "• The system is running successfully.\n" +
+                   "• Data format has been calibrated to decimals (e.g., 0.08).\n\n" +
+                   "How to use:\n" +
+                   "1. Ensure the Accessibility Service is turned ON.\n" +
+                   "2. Connect the gauge via OTG cable.\n" +
+                   "3. Open Chrome, Excel, or Notes.\n" +
+                   "4. Press Print on the device to type automatically."
+            textSize = 16f
+            setTextColor(0xFF1E293B.toInt())
+            setLineSpacing(0f, 1.3f)
         }
         
         val btnAccessibility = android.widget.Button(this).apply {
-            text = "تنظیمات دسترسی‌پذیری"
+            text = "Accessibility Settings"
+            setBackgroundColor(0xFF2563EB.toInt()) // رنگ آبی رسمی و صنعتی
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 16f
+            setPadding(20, 30, 20, 30)
+            val params = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 50
+            }
+            layoutParams = params
             setOnClickListener {
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 startActivity(intent)
@@ -77,6 +98,10 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
             usbIoManager = SerialInputOutputManager(usbPort, this)
             executor.submit(usbIoManager)
             isConnected = true
+            
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Toast.makeText(this, "Mecmesin Gauge Connected! 🟢", Toast.LENGTH_LONG).show()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -86,15 +111,11 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
         if (data == null || data.isEmpty()) return
         val rawData = String(data, Charsets.UTF_8).trim()
         
-        // هوشمندسازی استخراج عدد:
-        // ۱. حذف تمام حروف انگلیسی و واحدهای دستگاه (مثل ibf.in)
         var cleanNumber = rawData.replace(Regex("[a-zA-Z.\\s]+"), "")
         
-        // ۲. تبدیل به فرمت اعشاری درست (اگر عدد مثلاً 08 بود، تبدیلش می‌کند به 0.08)
         if (cleanNumber.length >= 2) {
             val numAsDouble = cleanNumber.toDoubleOrNull()
             if (numAsDouble != null) {
-                // تقسیم بر 100 برای ایجاد دو رقم اعشار دقیق مشابه روی دستگاه
                 cleanNumber = String.format(java.util.Locale.US, "%.2f", numAsDouble / 100.0)
             }
         } else if (cleanNumber.isNotEmpty()) {
@@ -103,7 +124,6 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
 
         if (cleanNumber.isEmpty()) return
 
-        // تایپ خودکار عدد اصلاح شده
         val rootNode = rootInActiveWindow ?: return
         val focusedNode = findFocusedNode(rootNode)
         
