@@ -21,18 +21,18 @@ class MainActivity : android.app.Activity() {
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(60, 60, 60, 60)
-            background = android.graphics.drawable.ColorDrawable(0xFFF8FAFC.toInt()) // تم روشن و مدرن
+            background = android.graphics.drawable.ColorDrawable(0xFFF8FAFC.toInt())
         }
         
         val infoText = android.widget.TextView(this).apply {
-            text = "Mecmesin Wedge Active!\n\n" +
-                   "• The system is running successfully.\n" +
-                   "• Data format has been calibrated to decimals (e.g., 0.08).\n\n" +
+            text = "Mecmesin & Mettler Toledo Wedge v3.0:\n\n" +
+                   "• System initialized successfully.\n" +
+                   "• Advanced negative & multi-number filter is ACTIVE.\n" +
+                   "• Decimals calibrated to triple digits (0.000).\n\n" +
                    "How to use:\n" +
-                   "1. Ensure the Accessibility Service is turned ON.\n" +
-                   "2. Connect the gauge via OTG cable.\n" +
-                   "3. Open Chrome, Excel, or Notes.\n" +
-                   "4. Press Print on the device to type automatically."
+                   "1. Ensure Accessibility Service is turned ON.\n" +
+                   "2. Connect your industrial scale via OTG cable.\n" +
+                   "3. Open Chrome or Notes and select input field."
             textSize = 16f
             setTextColor(0xFF1E293B.toInt())
             setLineSpacing(0f, 1.3f)
@@ -40,7 +40,7 @@ class MainActivity : android.app.Activity() {
         
         val btnAccessibility = android.widget.Button(this).apply {
             text = "Accessibility Settings"
-            setBackgroundColor(0xFF2563EB.toInt()) // رنگ آبی رسمی و صنعتی
+            setBackgroundColor(0xFF2563EB.toInt())
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 16f
             setPadding(20, 30, 20, 30)
@@ -68,6 +68,9 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
     private var usbIoManager: SerialInputOutputManager? = null
     private val executor = Executors.newSingleThreadExecutor()
     private var isConnected = false
+    
+    // متغیر نگهبان برای جلوگیری از تکرار رگباری داده‌ها
+    private var lastTypedData: String = "" 
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (!isConnected) {
@@ -100,7 +103,7 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
             isConnected = true
             
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                Toast.makeText(this, "Mecmesin Gauge Connected! 🟢", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Scale Connected Successfully! 🟢", Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -111,19 +114,36 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
         if (data == null || data.isEmpty()) return
         val rawData = String(data, Charsets.UTF_8).trim()
         
-        var cleanNumber = rawData.replace(Regex("[a-zA-Z.\\s]+"), "")
+        // ۱. فیلتر فوق هوشمند: استخراج اولین بخش عددی معتبر (شامل علامت منفی احتمالی)
+        // این الگو مانع چسبیدن دو عدد مجاور مثل 10104-10103- می‌شود و دومی را دور می‌اندازد
+        val regex = Regex("-?\\d+\\.\\d+|-?\\d+")
+        val match = regex.find(rawData)
         
-        if (cleanNumber.length >= 2) {
-            val numAsDouble = cleanNumber.toDoubleOrNull()
-            if (numAsDouble != null) {
-                cleanNumber = String.format(java.util.Locale.US, "%.2f", numAsDouble / 100.0)
+        if (match == null) return
+        var cleanNumber = match.value
+
+        // ۲. بازسازی ممیز اعشاری بر اساس منطق ترازوی شما (۳ رقم اعشار)
+        if (!cleanNumber.contains(".")) {
+            val isNegative = cleanNumber.startsWith("-")
+            val digitsOnly = cleanNumber.replace("-", "")
+            
+            if (digitsOnly.length >= 3) {
+                val numAsDouble = digitsOnly.toDoubleOrNull()
+                if (numAsDouble != null) {
+                    // تقسیم بر 1000.0 برای اعمال دقیق ۳ رقم اعشار (مثل 10.103)
+                    val formattedValue = String.format(java.util.Locale.US, "%.3f", numAsDouble / 1000.0)
+                    cleanNumber = if (isNegative) "-$formattedValue" else formattedValue
+                }
+            } else if (digitsOnly.isNotEmpty()) {
+                cleanNumber = if (isNegative) "-0.0$digitsOnly" else "0.0$digitsOnly"
             }
-        } else if (cleanNumber.isNotEmpty()) {
-            cleanNumber = "0.0$cleanNumber"
         }
 
-        if (cleanNumber.isEmpty()) return
+        // ۳. فیلتر نهایی متلر تولدو: اگر عدد تکراری بود عملیات را متوقف کن
+        if (cleanNumber == lastTypedData || cleanNumber.isEmpty()) return
+        lastTypedData = cleanNumber 
 
+        // ۴. تزریق اتوماتیک متن اصلاح شده در برنامه مقصد (Chrome/Notes)
         val rootNode = rootInActiveWindow ?: return
         val focusedNode = findFocusedNode(rootNode)
         
