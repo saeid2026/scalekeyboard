@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.scalekeyboard">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.USB_PERMISSION" />
     <uses-feature android:name="android.hardware.usb.host" />
@@ -9,7 +8,7 @@
         android:allowBackup="true"
         android:icon="@android:drawable/ic_menu_manage"
         android:roundIcon="@android:drawable/ic_menu_manage"
-        android:label="@string/app_name"
+        android:label="Scale Keyboard"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
         
