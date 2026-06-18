@@ -25,9 +25,9 @@ class MainActivity : android.app.Activity() {
         }
         
         val infoText = android.widget.TextView(this).apply {
-            text = "Mecmesin & Mettler Toledo Wedge v3.0:\n\n" +
-                   "• System initialized successfully.\n" +
-                   "• Advanced negative & multi-number filter is ACTIVE.\n" +
+            text = "Mecmesin & Mettler Toledo Wedge v4.0:\n\n" +
+                   "• Industrial Stability Mode is ACTIVE.\n" +
+                   "• Data fragmentation protection enabled.\n" +
                    "• Decimals calibrated to triple digits (0.000).\n\n" +
                    "How to use:\n" +
                    "1. Ensure Accessibility Service is turned ON.\n" +
@@ -69,8 +69,10 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
     private val executor = Executors.newSingleThreadExecutor()
     private var isConnected = false
     
-    // متغیر نگهبان برای جلوگیری از تکرار رگباری داده‌ها
     private var lastTypedData: String = "" 
+    
+    // مخزن موقت برای جمع‌آوری قطعات تکه‌تکه شده دیتا
+    private val stringBuffer = StringBuilder()
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (!isConnected) {
@@ -103,7 +105,7 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
             isConnected = true
             
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                Toast.makeText(this, "Scale Connected Successfully! 🟢", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Scale Connected (Protected Mode) 🟢", Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -112,17 +114,28 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
 
     override fun onNewData(data: ByteArray?) {
         if (data == null || data.isEmpty()) return
-        val rawData = String(data, Charsets.UTF_8).trim()
         
-        // ۱. فیلتر فوق هوشمند: استخراج اولین بخش عددی معتبر (شامل علامت منفی احتمالی)
-        // این الگو مانع چسبیدن دو عدد مجاور مثل 10104-10103- می‌شود و دومی را دور می‌اندازد
+        // تبدیل تکه دیتای رسیده به متن و اضافه کردن آن به مخزن موقت
+        val chunk = String(data, Charsets.UTF_8)
+        stringBuffer.append(chunk)
+        
+        // فقط زمانی پردازش را شروع کن که علامت پایان خط (\n یا \r) رسیده باشد
+        if (!chunk.contains("\n") && !chunk.contains("\r")) {
+            return // دیتای کامل هنوز نرسیده، منتظر تکه بعدی بمان
+        }
+        
+        // حالا که دیتای کامل خط رسید، آن را برای استخراج عدد برمی‌داریم و مخزن را خالی می‌کنیم
+        val completeLine = stringBuffer.toString().trim()
+        stringBuffer.setLength(0) 
+
+        // ۱. فیلتر استخراج اولین بخش عددی معتبر (شامل علامت منفی احتمالی)
         val regex = Regex("-?\\d+\\.\\d+|-?\\d+")
-        val match = regex.find(rawData)
+        val match = regex.find(completeLine)
         
         if (match == null) return
         var cleanNumber = match.value
 
-        // ۲. بازسازی ممیز اعشاری بر اساس منطق ترازوی شما (۳ رقم اعشار)
+        // ۲. بازسازی ممیز اعشاری بر اساس ۳ رقم اعشار ترازوی شما
         if (!cleanNumber.contains(".")) {
             val isNegative = cleanNumber.startsWith("-")
             val digitsOnly = cleanNumber.replace("-", "")
@@ -130,7 +143,6 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
             if (digitsOnly.length >= 3) {
                 val numAsDouble = digitsOnly.toDoubleOrNull()
                 if (numAsDouble != null) {
-                    // تقسیم بر 1000.0 برای اعمال دقیق ۳ رقم اعشار (مثل 10.103)
                     val formattedValue = String.format(java.util.Locale.US, "%.3f", numAsDouble / 1000.0)
                     cleanNumber = if (isNegative) "-$formattedValue" else formattedValue
                 }
@@ -139,11 +151,11 @@ class MecmesinAccessibilityService : AccessibilityService(), SerialInputOutputMa
             }
         }
 
-        // ۳. فیلتر نهایی متلر تولدو: اگر عدد تکراری بود عملیات را متوقف کن
+        // ۳. فیلتر نهایی جلوگیری از تکرار مجدد عدد یکسان
         if (cleanNumber == lastTypedData || cleanNumber.isEmpty()) return
         lastTypedData = cleanNumber 
 
-        // ۴. تزریق اتوماتیک متن اصلاح شده در برنامه مقصد (Chrome/Notes)
+        // ۴. تزریق نهایی به برنامه مقصد (Chrome/Notes)
         val rootNode = rootInActiveWindow ?: return
         val focusedNode = findFocusedNode(rootNode)
         
